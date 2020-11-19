@@ -1,0 +1,16 @@
+flask
+flask-bootstrap
+flask-wtf
+flask-moment
+flask-mail
+email_validator
+validator
+flask-migrate
+flask-sqlalchemy
+flask-pagedown
+markdown
+bleach
+click
+flask-login
+jeefies
+faker
