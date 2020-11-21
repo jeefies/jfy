@@ -2,18 +2,32 @@ import os
 import csv
 import zlib
 import codecs
-import base64
 import socket
 from collections import deque
 from threading import Thread
 
+from .csvbase import csv_b64cen, csv_b64cde, csv_b85cen, csv_b85cde
+
 class base:
 
     @classmethod
-    def _enb(cls, x): return base64.b85encode(zlib.compress(cls.to_bytes(x)))
+    def _64enb(cls, x):
+        return csv_b64cen(cls.to_bytes(x))
 
     @classmethod
-    def _deb(cls, x): return zlib.decompress(base64.b85decode(cls.to_bytes(x)))
+    def _64deb(cls, x):
+        return csv_b64cde(x)
+
+    @classmethod
+    def _85enb(cls, x):
+        return csv_b85cen(cls.to_bytes(x))
+
+    @classmethod
+    def _85deb(cls, x):
+        return csv_b85cde(x)
+
+    _enb = _85enb
+    _deb = _85deb
 
     def __init__(self, place, name = ''):
         pl = os.path.abspath(place)
@@ -24,22 +38,37 @@ class base:
         else:
             raise FileNotFoundError('No such directory')
         self.de = deque()
-        self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.__adds = deque()
+
         self._sock_path = os.path.join(self.pl, './.J{}.d'.format(name))
         if os.path.exists(self._sock_path): os.unlink(self._sock_path)
-        self._sock.bind(self._sock_path)
+
+        self._socko = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+
+        self._socko.bind(self._sock_path)
+        self._socko.listen(1)
+        
+        self._sockr = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self._sockr.connect(self._sock_path)
+        self._sock, addr = self._socko.accept()
+
+        self._add_thrs = [Thread(target = self._Addthr) for _ in range(5)]
+        [x.setDaemon(True) for x in self._add_thrs]
+        [x.start() for x in self._add_thrs]
 
     def _Addthr(self):
-        sock = socket.socket(AF_UNIX, socket.SOCK_STREAM)
-        sock.connect(self._sock_path)
+        _e = None
         while 1:
-            r = sock.recv(1)
-            if r == b's':
-                ags = self.__adds.popleft()
-                self.de.append(deque(self.enb(a) for a in ags))
-            elif r == b'e':
-                self.sock.close()
-                return 0
+            try:
+                r = self._sockr.recv(1)
+                if r == b's':
+                    _e = l = self.__adds.popleft()
+                    a = l[-1]
+                    de = deque(self._enb(a) for a in l)
+                    _e = de
+                    self.de.append(de)
+            except Exception as e:
+                pass
 
     def init(self):
         if not os.path.exists(self.file):
@@ -54,30 +83,35 @@ class base:
                     else:
                         break
 
-        for l in lines:
-            ps = l.strip().split(b',')
-            ps = (self._deb(p) for p in ps)
-            self.de.append(deque(ps))
+            for l in lines():
+                self.de.append(deque(l.strip().split(b',')))
 
     def _index(self, index):
-        return deque(self._deb(i) for i in self.de[index])
+        return self._org(self.de[index])
 
 
     def add(self, *args):
-        ags = (self._enb(i) for i in args)
-        self.de.append(deque(ags))
+        self._add(args)
         return args
+
+    def _add(self, args):
+        self.__adds.append(args)
+        self._sock.send(b's')
+
+    def add_all(self, li_tup):
+        self.__adds.extend(li_tup)
+        self._sock.send(b's' * len(li_tup))
+        return li_tup
 
     def reset(self):
         self.de.clear()
         self.update()
 
     def update(self):
-        ctx = b'\n'.join(b' '.join(map(self.enb, each)) for each in self.de)
         with open(self.file, 'wb') as f:
-            return f.write(ctx)
+            return f.write(self._bytes())
 
-    def deepsearch(self, col, exp):
+    def deepsearch(self, exp, col=None):
         de = self.de.copy()
         exp = self._enb(exp)
         res = deque()
@@ -85,38 +119,43 @@ class base:
             while 1:
                 try:
                     out = de.pop()
-                    if out[col] == exp:
-                        r.append(out)
+                    if (exp == out[col] if col is not None else exp in out):
+                        r.append(self._org(out))
                 except:
-                    break
+                    return 0
         li = [Thread(target=find, args=(de,res)) for _ in range(5)]
         [l.start() for l in li]
         [l.join() for l in li]
-        return deque(self._deb(i) for i in it for it in res)
+        return res
+
+    def _org(self, de):
+        return deque(self._deb(i) for i in de)
 
     @staticmethod
     def to_string(s, encode='utf-8'):
         if isinstance(s, str):
             return s
-        try:
-            return codecs.encode(b, encode)
-        except:
+        elif isinstance(s, bytes):
             try:
-                return codecs.encode(b)
+                return codecs.decode(s, encode)
             except:
-                pass
-        try:
-            return str(s)
-        except:
+                try:
+                    return codecs.decode(s)
+                except Exception as e:
+                    raise e
+        else:
             try:
-                return codecs.decode(bytes(s))
+                return str(s)
             except:
                 raise TypeError('Can not change into bytes')
 
+
     @staticmethod
     def to_bytes(b, encode='utf-8'):
-        if isinstance(b, bytes):
+        if isinstance(b, (bytes, bytearray)):
             return b
+        if isinstance(b, base):
+            return b._bytes()
         try:
             return codecs.encode(b, encode)
         except:
@@ -133,10 +172,29 @@ class base:
                 raise TypeError('can not change into bytes')
 
     def quit(self):
-        self._sock.close()
+        try:
+            self._socko.shutdown(socket.SHUT_RDWR)
+            self._sock.shutdown(socket.SHUT_RDWR)
+            self._sockr.shutdown(socket.SHUT_RDWR)
+            self.update()
+            os.remove(self._sock_path)
+            return 0
+        except:
+            return 1
 
-    def __getitem__(self, item):
-        return self._index(item)
+    @staticmethod
+    def _de_slice(de, start=None, end=None):
+        if not start:
+            start = 0
+        if not end:
+            end = len(de)
+        return deque(de[a] for a in range(start, end))
+
+    def __str__(self):
+        return self.to_string(self._bytes())
+
+    def _bytes(self):
+        return b'\n'.join(b','.join(each) for each in self.de)
 
     def __del__(self):
         self.quit()
