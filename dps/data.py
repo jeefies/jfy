@@ -43,14 +43,21 @@ class base:
         self._sock_path = os.path.join(self.pl, './.J{}.d'.format(name))
         if os.path.exists(self._sock_path): os.unlink(self._sock_path)
 
-        self._socko = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        #self._socko = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
-        self._socko.bind(self._sock_path)
-        self._socko.listen(1)
+        #self._socko.bind(self._sock_path)
+        #self._socko.listen(1)
         
+        #self._sockr = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        #self._sockr.connect(self._sock_path)
+        #self._sock, addr = self._socko.accept()
+        
+        # above for tcp socket connection
+        # below for upd connection
+        
+        self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         self._sockr = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self._sockr.connect(self._sock_path)
-        self._sock, addr = self._socko.accept()
+        self._sockr.bind(self._sock_path)
 
         self._add_thrs = [Thread(target = self._Addthr) for _ in range(5)]
         [x.setDaemon(True) for x in self._add_thrs]
@@ -60,7 +67,7 @@ class base:
         _e = None
         while 1:
             try:
-                r = self._sockr.recv(1)
+                r, a = self._sockr.recvfrom(1) # recvfrom for udp connection, recv for tcp
                 if r == b's':
                     _e = l = self.__adds.popleft()
                     a = l[-1]
@@ -96,7 +103,8 @@ class base:
 
     def _add(self, args):
         self.__adds.append(args)
-        self._sock.send(b's')
+        #self._sock.send(b's')
+        self._sock.sendto(b's', self._sock_path) # for udp connection
 
     def add_all(self, li_tup):
         self.__adds.extend(li_tup)
