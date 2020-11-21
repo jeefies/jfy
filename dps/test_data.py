@@ -47,31 +47,21 @@ class TestData:
     def test_many(self):
         fk = Faker()
         
-        dts = [(fk.color().encode(), fk.name().encode(), fk.country().encode()) for _ in range(10)]
-        #print(dts[-10:])
-        #print("test_many")
-        f = open('tresult.txt', 'w')
+        dts = [(fk.color().encode(), fk.name().encode(), fk.country().encode()) for _ in range(100)]
 
         adt = time.time()
         for i,a in enumerate(dts):
             self.data.add(*a)
-
         adt = time.time() - adt
-        #print('adt')
-        f.write('adt: {}s\n'.format(adt))
-        f.flush()
-        #print('start searching')
-
+        print("add 100 use", adt)
         time.sleep(1)
         srt = time.time()
         re = self.data.deepsearch(dts[-1][0], 0)
         srt = time.time() - srt
+        print('search time', srt)
         assert re, re
         re = re[-1]
         print("search result:", re, end='\n\n')
-
-        print("search time:{}".format(srt), file=f)
-        f.close()
         
         if not dts[-1][1] in re or not re[-1] == dts[-1][-1]:
             assert False, str(tuple(map(self.data._org, self.data.de[-5:])))
