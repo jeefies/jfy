@@ -104,15 +104,23 @@ class TestInit:
         self.d = base(os.getcwd(), 'testinit')
         fk = self.fk = Faker()
         ns = [(fk.name(), fk.country()) for a in range(50)]
+        print(len(ns))
+        adt = time.time()
         self.d.add_all(ns)
-        time.sleep(0.5)
+        while len(self.d.de) != 50: pass
+        ut = time.time() - adt
+        print('use time', ut)
         self.d.update()
         print('test init init')
 
     def test_read(self):
         b = base(os.getcwd(), 'testinit')
         print('reading for TestInit')
+        adt = time.time()
         b.init()
+        while len(self.d.de) != 50: pass
+        ut = time.time() - adt
+        print('init time use', ut)
         print(b._de_slice(b.de, 0, 7))
         assert b.de == self.d.de, (str(b.de[5]), str(self.d.de[5]))
         print('test read')

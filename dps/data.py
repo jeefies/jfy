@@ -56,7 +56,7 @@ class base:
         # below for upd connection
         
         self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-        self._sockr = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self._sockr = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         self._sockr.bind(self._sock_path)
 
         self._add_thrs = [Thread(target = self._Addthr) for _ in range(5)]
@@ -108,7 +108,7 @@ class base:
 
     def add_all(self, li_tup):
         self.__adds.extend(li_tup)
-        self._sock.send(b's' * len(li_tup))
+        for _ in li_tup:self._sock.sendto(b's', self._sock_path)
         return li_tup
 
     def reset(self):
@@ -181,11 +181,12 @@ class base:
 
     def quit(self):
         try:
-            self._socko.shutdown(socket.SHUT_RDWR)
+            sockname = os.path.basename(self._sock_path) 
+            while sockname in os.listdir(self.pl):
+                os.remove(self._sock_path) # remove socket use file
             self._sock.shutdown(socket.SHUT_RDWR)
             self._sockr.shutdown(socket.SHUT_RDWR)
             self.update()
-            os.remove(self._sock_path)
             return 0
         except:
             return 1
@@ -205,4 +206,4 @@ class base:
         return b'\n'.join(b','.join(each) for each in self.de)
 
     def __del__(self):
-        self.quit()
+        return self.quit()
