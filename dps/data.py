@@ -6,6 +6,7 @@ import socket
 from collections import deque
 from threading import Thread
 
+from .mydeque import Deque
 from .csvbase import csv_b64cen, csv_b64cde, csv_b85cen, csv_b85cde
 
 class base:
@@ -20,11 +21,19 @@ class base:
 
     @classmethod
     def _85enb(cls, x):
-        return csv_b85cen(cls.to_bytes(x))
+        try:
+            return csv_b85cen(cls.to_bytes(x))
+        except Exception as e:
+            print(x, '::encode error:', e)
+            raise e
 
     @classmethod
     def _85deb(cls, x):
-        return csv_b85cde(x)
+        try:
+            return csv_b85cde(x)
+        except Exception as e:
+            print(x)
+            raise e
 
     _enb = _85enb
     _deb = _85deb
@@ -37,7 +46,7 @@ class base:
             self.file = os.path.join(self.pl, '.J{}.csv'.format(name))
         else:
             raise FileNotFoundError('No such directory')
-        self.de = deque()
+        self.de = Deque()
         self.__adds = deque()
 
         self._sock_path = os.path.join(self.pl, './.J{}.d'.format(name))
@@ -69,13 +78,17 @@ class base:
             try:
                 r, a = self._sockr.recvfrom(1) # recvfrom for udp connection, recv for tcp
                 if r == b's':
-                    _e = l = self.__adds.popleft()
-                    a = l[-1]
-                    de = deque(self._enb(a) for a in l)
-                    _e = de
-                    self.de.append(de)
+                    self.__adi()
             except Exception as e:
                 pass
+
+    def __adi(self):
+        l = self.__adds.popleft()
+        ai = self._anain(l)
+        self.de.append(ai)
+
+    def _anain(self, l):
+        return deque(self._enb(a) for a in l)
 
     def init(self):
         if not os.path.exists(self.file):
@@ -94,8 +107,7 @@ class base:
                 self.de.append(deque(l.strip().split(b',')))
 
     def _index(self, index):
-        return self._org(self.de[index])
-
+        return self._org(self.de[index][1])
 
     def add(self, *args):
         self._add(args)
@@ -111,9 +123,16 @@ class base:
         for _ in li_tup:self._sock.sendto(b's', self._sock_path)
         return li_tup
 
+    def remove(self, index):
+        return self.de.popi(index)
+
     def reset(self):
         self.de.clear()
-        self.update()
+        try:
+            os.remove(self.file)
+            return 0
+        except:
+            return 1
 
     def update(self):
         with open(self.file, 'wb') as f:
@@ -123,12 +142,13 @@ class base:
         de = self.de.copy()
         exp = self._enb(exp)
         res = deque()
-        def find(de, r):
+        def find(d, r):
             while 1:
                 try:
-                    out = de.pop()
-                    if (exp == out[col] if col is not None else exp in out):
-                        r.append(self._org(out))
+                    o = d.pop()
+                    out = o[1]
+                    if (exp == out[col] if (col is not None) else (exp in out)):
+                        r.append((o[0], self._org(out)))
                 except:
                     return 0
         li = [Thread(target=find, args=(de,res)) for _ in range(5)]
@@ -139,8 +159,8 @@ class base:
     def _org(self, de):
         return deque(self._deb(i) for i in de)
 
-    @staticmethod
-    def to_string(s, encode='utf-8'):
+    @classmethod
+    def to_string(cls, s, encode='utf-8'):
         if isinstance(s, str):
             return s
         elif isinstance(s, bytes):
@@ -152,14 +172,10 @@ class base:
                 except Exception as e:
                     raise e
         else:
-            try:
-                return str(s)
-            except:
-                raise TypeError('Can not change into bytes')
+            return str(s)
 
-
-    @staticmethod
-    def to_bytes(b, encode='utf-8'):
+    @classmethod
+    def to_bytes(cls, b, encode='utf-8'):
         if isinstance(b, (bytes, bytearray)):
             return b
         if isinstance(b, base):
@@ -171,13 +187,7 @@ class base:
                 return codecs.encode(b)
             except:
                 pass
-        try:
-            return bytes(b)
-        except:
-            try:
-                return codecs.encode(str(b), 'utf-8')
-            except:
-                raise TypeError('can not change into bytes')
+            return codecs.encode(cls.to_string(b), encode)
 
     def quit(self):
         try:
@@ -192,12 +202,14 @@ class base:
             return 1
 
     @staticmethod
-    def _de_slice(de, start=None, end=None):
+    def _de_slice(de, start=None, end=None, step=None):
         if not start:
             start = 0
         if not end:
             end = len(de)
-        return deque(de[a] for a in range(start, end))
+        if not step:
+            step = 1
+        return deque(de[a] for a in range(start, end, step))
 
     def __str__(self):
         return self.to_string(self._bytes())
@@ -207,3 +219,13 @@ class base:
 
     def __del__(self):
         return self.quit()
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            r = self._de_slice(self.de, index.start, index.stop, index.step)
+            return deque(self._org(i[1]) for i in r)
+        else:
+            return self._org(self.de[index][1])
+
+    def __len__(self):
+        return len(self.de)

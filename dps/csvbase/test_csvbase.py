@@ -40,7 +40,7 @@ class TestBase:
 
     def test_much(self):
         fk = Fk()
-        bs = [fk.name().encode() for _ in range(1500)]
+        bs = [fk.name().encode() for _ in range(200)]
         arr = [self.t3(b) for b in bs]
         assert arr
 
